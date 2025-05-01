@@ -48,15 +48,14 @@ if app_mode == "User Upload":
             st.subheader("Sentiment Pie Chart")
             response = requests.post(f"{BACKEND_URL}/sentiment-pie", files={"file": uploaded_file})
 
-            # Log the response content for debugging
-            st.write(f"Response Status Code: {response.status_code}")
-            st.write(f"Response Content: {response.content.decode('utf-8')}")
-
             if response.status_code == 200:
                 try:
                     pie_data = response.json()
-                    fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
-                    st.plotly_chart(fig)
+                    if "labels" in pie_data and "values" in pie_data:
+                        fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
+                        st.plotly_chart(fig)
+                    else:
+                        st.error("Invalid JSON structure received for the pie chart.")
                 except ValueError:
                     st.error("Received invalid JSON response from the backend.")
             else:
@@ -73,7 +72,7 @@ if app_mode == "User Upload":
                 except Exception as e:
                     st.error(f"Failed to generate word cloud: {e}")
             else:
-                st.error("Failed to generate word cloud")
+                st.error(f"Failed to generate word cloud. Status Code: {response.status_code}")
 
             # -------- Geo Map if latitude and longitude exist --------
             if "latitude" in df.columns and "longitude" in df.columns:
