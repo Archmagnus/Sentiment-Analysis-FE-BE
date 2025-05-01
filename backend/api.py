@@ -1,11 +1,10 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse, JSONResponse
 from io import BytesIO
 import pandas as pd
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
 import json
 import logging
 
@@ -25,7 +24,6 @@ async def sentiment_pie(file: UploadFile = File(...)):
         df = pd.read_csv(BytesIO(contents))  # Assuming CSV format
 
         # Example of sentiment analysis logic (can be replaced with a real model)
-        # For demo purposes, we'll fake some sentiment analysis
         sentiment_data = {
             "labels": ["Positive", "Negative", "Neutral"],
             "values": [50, 30, 20]  # These would be dynamically calculated based on text analysis
@@ -36,7 +34,6 @@ async def sentiment_pie(file: UploadFile = File(...)):
 
         return sentiment_data
     except Exception as e:
-        # Log the error and return a JSON error message
         logging.error(f"Error in /sentiment-pie: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error in generating sentiment pie chart: {str(e)}"})
 
