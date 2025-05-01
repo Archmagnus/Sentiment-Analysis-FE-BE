@@ -2,9 +2,13 @@ import streamlit as st
 import os
 import pandas as pd
 from datetime import datetime
-from backend.api import load_data, sentiment_pie_chart, generate_wordcloud, generate_geo_map
+import requests
+from io import BytesIO
+import plotly.graph_objects as go
+from PIL import Image
 
 UPLOAD_DIR = "uploaded_files"
+BACKEND_URL = "https://your-backend-url.com"  # Replace with your actual backend URL
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 st.set_page_config(page_title="CSV Analyzer App", layout="wide")
@@ -15,48 +19,70 @@ app_mode = st.sidebar.radio("Choose the view:", ["User Upload", "Admin Dashboard
 # ---------------------- USER UPLOAD PAGE ----------------------
 if app_mode == "User Upload":
     st.title("📊 Upload CSV/Excel for Analysis")
-    
-    # Accept both CSV and Excel files
+
     uploaded_file = st.file_uploader("Upload CSV/Excel File", type=["csv", "xlsx", "xls"])
 
     if uploaded_file:
-        # Save file to disk with a timestamp to avoid overwriting
         filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
         file_path = os.path.join(UPLOAD_DIR, filename)
-        
+
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
         st.success(f"Uploaded and saved as {filename}")
 
-        # Load and process data based on file type
-        if uploaded_file.name.endswith(".csv"):
-            data = pd.read_csv(file_path)
+        # Load file into dataframe
+        if filename.endswith(".csv"):
+            df = pd.read_csv(file_path)
         else:
-            data = pd.read_excel(file_path)
+            df = pd.read_excel(file_path)
 
-        if data is not None:
-            st.subheader("Data Preview")
-            st.write(data.head())
+        st.subheader("Data Preview")
+        st.write(df.head())
 
-            # Choose column for text analysis
-            text_column = st.selectbox("Select a column for sentiment/word cloud:", options=data.columns)
+        text_column = st.selectbox("Select a column for sentiment/word cloud:", options=df.columns)
 
-            if text_column:
-                st.subheader("Sentiment Pie Chart")
-                fig = sentiment_pie_chart(data[text_column])
+        if text_column:
+            # -------- Sentiment Pie Chart API --------
+            st.subheader("Sentiment Pie Chart")
+            response = requests.post(f"{BACKEND_URL}/sentiment-pie", json={"texts": df[text_column].dropna().tolist()})
+            if response.status_code == 200:
+                pie_data = response.json()
+                fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
                 st.plotly_chart(fig)
+            else:
+                st.error("Failed to generate sentiment chart")
 
-                st.subheader("Word Cloud")
-                wc_plt = generate_wordcloud(data[text_column])
-                st.pyplot(wc_plt)
+            # -------- Word Cloud API --------
+            st.subheader("Word Cloud")
+            response = requests.post(f"{BACKEND_URL}/wordcloud", json={"texts": df[text_column].dropna().tolist()})
+            if response.status_code == 200:
+                image_bytes = BytesIO(response.content)
+                image = Image.open(image_bytes)
+                st.image(image)
+            else:
+                st.error("Failed to generate word cloud")
 
-                # Optional geo map (if lat/lon present)
-                if 'latitude' in data.columns and 'longitude' in data.columns:
-                    st.subheader("Geo Map")
-                    geo_map = generate_geo_map(data['latitude'], data['longitude'])
-                    st.write(geo_map)
+            # -------- Geo Map if latitude and longitude exist --------
+            if "latitude" in df.columns and "longitude" in df.columns:
+                st.subheader("Geo Map")
+                response = requests.post(f"{BACKEND_URL}/geo-map", json={
+                    "latitude": df["latitude"].dropna().tolist(),
+                    "longitude": df["longitude"].dropna().tolist()
+                })
+                if response.status_code == 200:
+                    geo_data = response.json()
+                    fig = go.Figure(data=go.Scattergeo(
+                        lon=geo_data["longitude"],
+                        lat=geo_data["latitude"],
+                        mode='markers',
+                        marker=dict(size=6)
+                    ))
+                    fig.update_layout(geo=dict(scope="world"))
+                    st.plotly_chart(fig)
                 else:
-                    st.info("No latitude/longitude columns found.")
+                    st.warning("Failed to generate geo map.")
+            else:
+                st.info("No latitude/longitude columns found.")
 
 # ---------------------- ADMIN DASHBOARD ----------------------
 elif app_mode == "Admin Dashboard":
@@ -69,17 +95,13 @@ elif app_mode == "Admin Dashboard":
 
         if selected_file:
             full_path = os.path.join(UPLOAD_DIR, selected_file)
-            
-            # Load and process data based on file type
-            if selected_file.endswith(".csv"):
-                data = pd.read_csv(full_path)
-            else:
-                data = pd.read_excel(full_path)
 
-            if data is not None:
-                st.subheader(f"Preview of: {selected_file}")
-                st.write(data.head())
+            if selected_file.endswith(".csv"):
+                df = pd.read_csv(full_path)
             else:
-                st.error("Could not load this file.")
+                df = pd.read_excel(full_path)
+
+            st.subheader(f"Preview of: {selected_file}")
+            st.write(df.head())
     else:
         st.info("No uploaded files found.")
