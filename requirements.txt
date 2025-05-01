@@ -1,0 +1,16 @@
+streamlit==1.33.0
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+pandas>=1.5,<2.1
+numpy>=1.21,<1.27
+scikit-learn>=1.2
+matplotlib>=3.5
+torch>=2.0.0
+torchvision>=0.15.0
+opencv-python>=4.5.0
+tqdm>=4.65.0
+scipy>=1.10.0
+pillow>=9.0.0
+openpyxl
