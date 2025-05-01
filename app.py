@@ -9,13 +9,20 @@ import time
 import os
 from typing import Optional, Dict, Any
 
-# Configuration
+# 1. PAGE CONFIG MUST BE FIRST STREAMLIT COMMAND
+st.set_page_config(
+    page_title="Sentiment Analysis Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
+
+# Configuration (non-Streamlit code can come after set_page_config)
 BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 TIMEOUT = 15  # Increased timeout for large files
 
-# Custom CSS for better UI
+# Custom CSS for better UI (must come after set_page_config)
 st.markdown("""
     <style>
     .stAlert { border-left: 4px solid #ff4b4b; }
@@ -62,13 +69,6 @@ def safe_api_call(
                 raise Exception(f"Connection Error: {str(e)}")
         time.sleep(RETRY_DELAY)
     return None
-
-# UI Setup
-st.set_page_config(
-    page_title="Sentiment Analysis Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
 
 # Sidebar with connection info
 with st.sidebar:
