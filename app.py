@@ -52,7 +52,7 @@ if app_mode == "User Upload":
                 try:
                     pie_data = response.json()
                     if "labels" in pie_data and "values" in pie_data:
-                        fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])]))
+                        fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
                         st.plotly_chart(fig)
                     else:
                         st.error("Invalid JSON structure received for the pie chart.")
