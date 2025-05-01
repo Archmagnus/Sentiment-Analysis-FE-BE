@@ -47,12 +47,19 @@ if app_mode == "User Upload":
             # -------- Sentiment Pie Chart API --------
             st.subheader("Sentiment Pie Chart")
             response = requests.post(f"{BACKEND_URL}/sentiment-pie", files={"file": uploaded_file})
+
+            # Log the response content for debugging
+            st.write(f"Response Content: {response.content}")
+
             if response.status_code == 200:
-                pie_data = response.json()
-                fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
-                st.plotly_chart(fig)
+                try:
+                    pie_data = response.json()
+                    fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
+                    st.plotly_chart(fig)
+                except ValueError:
+                    st.error("Received invalid JSON response from the backend.")
             else:
-                st.error("Failed to generate sentiment chart")
+                st.error(f"Failed to generate sentiment chart. Status Code: {response.status_code}")
 
             # -------- Word Cloud API --------
             st.subheader("Word Cloud")
