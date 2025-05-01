@@ -49,7 +49,8 @@ if app_mode == "User Upload":
             response = requests.post(f"{BACKEND_URL}/sentiment-pie", files={"file": uploaded_file})
 
             # Log the response content for debugging
-            st.write(f"Response Content: {response.content}")
+            st.write(f"Response Status Code: {response.status_code}")
+            st.write(f"Response Content: {response.content.decode('utf-8')}")
 
             if response.status_code == 200:
                 try:
@@ -65,9 +66,12 @@ if app_mode == "User Upload":
             st.subheader("Word Cloud")
             response = requests.post(f"{BACKEND_URL}/wordcloud", json={"texts": df[text_column].dropna().tolist()})
             if response.status_code == 200:
-                image_bytes = BytesIO(response.content)
-                image = Image.open(image_bytes)
-                st.image(image)
+                try:
+                    image_bytes = BytesIO(response.content)
+                    image = Image.open(image_bytes)
+                    st.image(image)
+                except Exception as e:
+                    st.error(f"Failed to generate word cloud: {e}")
             else:
                 st.error("Failed to generate word cloud")
 

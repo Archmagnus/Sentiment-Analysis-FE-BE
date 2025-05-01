@@ -1,65 +1,54 @@
-import pandas as pd
-from textblob import TextBlob
+from fastapi import FastAPI, File, UploadFile
+from pydantic import BaseModel
+from io import BytesIO
+import json
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
 import plotly.express as px
-from flask import Flask, jsonify, request
-import io
+from typing import List
 
-app = Flask(__name__)
+app = FastAPI()
 
-# Load the dataset
-def load_data(uploaded_file):
+# Define Pydantic model for WordCloud request
+class WordCloudRequest(BaseModel):
+    texts: List[str]
+
+@app.post("/sentiment-pie")
+async def sentiment_pie(file: UploadFile = File(...)):
+    # Simulate sentiment analysis (replace this with your actual model)
     try:
-        # Read the CSV or Excel file into a dataframe
-        if uploaded_file.endswith('.csv'):
-            data = pd.read_csv(uploaded_file)
-        else:
-            data = pd.read_excel(uploaded_file)
-        return data
+        # Simulate response data
+        sentiment_data = {
+            "labels": ["Positive", "Negative", "Neutral"],
+            "values": [50, 30, 20]
+        }
+        return sentiment_data
     except Exception as e:
-        print(f"Error loading data: {e}")
-        return None
+        return {"error": f"Error in generating sentiment pie chart: {str(e)}"}
 
-# Sentiment pie chart
-@app.route('/sentiment-pie', methods=['POST'])
-def sentiment_pie_chart():
+@app.post("/wordcloud")
+async def wordcloud(request: WordCloudRequest):
     try:
-        # Get the file from the request
-        file = request.files['file']
-        if file.filename.endswith('.csv') or file.filename.endswith('.xlsx'):
-            # Load data into DataFrame
-            data = load_data(file)
-            
-            # Combine all text columns into one series for sentiment analysis
-            text_data = data.select_dtypes(include=['object']).fillna('')
-            text_column = text_data.apply(lambda row: ' '.join(row), axis=1)
+        # Generate word cloud from text data
+        text = " ".join(request.texts)
+        wordcloud = WordCloud(width=800, height=400).generate(text)
 
-            sentiment_counts = {'Positive': 0, 'Negative': 0, 'Neutral': 0}
-
-            # Sentiment analysis
-            for text in text_column:
-                blob = TextBlob(str(text))
-                sentiment = blob.sentiment.polarity
-                if sentiment > 0:
-                    sentiment_counts['Positive'] += 1
-                elif sentiment < 0:
-                    sentiment_counts['Negative'] += 1
-                else:
-                    sentiment_counts['Neutral'] += 1
-
-            labels = list(sentiment_counts.keys())
-            values = list(sentiment_counts.values())
-
-            # Generate pie chart
-            fig = px.pie(names=labels, values=values, title="Sentiment Distribution")
-            # Convert chart to JSON response
-            chart_data = fig.to_dict()
-
-            return jsonify(chart_data)
-
-        else:
-            return jsonify({"error": "Invalid file format. Only CSV and Excel files are supported."}), 400
+        # Save image to BytesIO and return it
+        img_byte_arr = BytesIO()
+        wordcloud.to_image().save(img_byte_arr, format="PNG")
+        img_byte_arr.seek(0)
+        return StreamingResponse(img_byte_arr, media_type="image/png")
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": f"Error in generating word cloud: {str(e)}"}
 
-if __name__ == "__main__":
-    app.run(debug=True)
+@app.post("/geo-map")
+async def geo_map(latitude: List[float], longitude: List[float]):
+    try:
+        fig = px.scatter_geo(lat=latitude, lon=longitude)
+        # Save the map to a file (could be in other formats too, depending on needs)
+        geo_map_path = "/path/to/save/geo_map.html"
+        fig.write_html(geo_map_path)
+
+        return {"message": "Geo Map generated successfully", "path": geo_map_path}
+    except Exception as e:
+        return {"error": f"Error in generating geo map: {str(e)}"}
