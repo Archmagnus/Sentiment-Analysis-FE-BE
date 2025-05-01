@@ -1,54 +1,122 @@
-from fastapi import FastAPI, File, UploadFile
-from pydantic import BaseModel
+from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse, JSONResponse
 from io import BytesIO
-import json
+import pandas as pd
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-import plotly.express as px
-from typing import List
+import numpy as np
+from sklearn.preprocessing import LabelEncoder
+import json
+import logging
 
 app = FastAPI()
 
-# Define Pydantic model for WordCloud request
-class WordCloudRequest(BaseModel):
-    texts: List[str]
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 @app.post("/sentiment-pie")
 async def sentiment_pie(file: UploadFile = File(...)):
-    # Simulate sentiment analysis (replace this with your actual model)
+    """
+    Analyze sentiment in the provided file and return sentiment distribution.
+    """
     try:
-        # Simulate response data
+        # Read the uploaded file into a pandas DataFrame
+        contents = await file.read()
+        df = pd.read_csv(BytesIO(contents))  # Assuming CSV format
+
+        # Example of sentiment analysis logic (can be replaced with a real model)
+        # For demo purposes, we'll fake some sentiment analysis
         sentiment_data = {
             "labels": ["Positive", "Negative", "Neutral"],
-            "values": [50, 30, 20]
+            "values": [50, 30, 20]  # These would be dynamically calculated based on text analysis
         }
+
+        # In a real-world scenario, sentiment analysis would look something like:
+        # sentiment_data = analyze_sentiment(df['text_column']) 
+
         return sentiment_data
     except Exception as e:
-        return {"error": f"Error in generating sentiment pie chart: {str(e)}"}
+        # Log the error and return a JSON error message
+        logging.error(f"Error in /sentiment-pie: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Error in generating sentiment pie chart: {str(e)}"})
+
 
 @app.post("/wordcloud")
-async def wordcloud(request: WordCloudRequest):
+async def wordcloud(request: dict):
+    """
+    Generate a word cloud from the provided text data and return it as an image.
+    """
     try:
-        # Generate word cloud from text data
-        text = " ".join(request.texts)
+        texts = request.get("texts", [])
+        
+        if not texts:
+            raise ValueError("No text data provided for word cloud")
+
+        # Generate word cloud
+        text = " ".join(texts)
         wordcloud = WordCloud(width=800, height=400).generate(text)
 
-        # Save image to BytesIO and return it
+        # Save word cloud image to a BytesIO object
         img_byte_arr = BytesIO()
         wordcloud.to_image().save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
+
+        # Return the word cloud image as a streaming response
         return StreamingResponse(img_byte_arr, media_type="image/png")
     except Exception as e:
-        return {"error": f"Error in generating word cloud: {str(e)}"}
+        logging.error(f"Error in /wordcloud: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Error in generating word cloud: {str(e)}"})
+
 
 @app.post("/geo-map")
-async def geo_map(latitude: List[float], longitude: List[float]):
+async def geo_map(request: dict):
+    """
+    Generate a geo map from latitude and longitude data and return it as a map image.
+    """
     try:
-        fig = px.scatter_geo(lat=latitude, lon=longitude)
-        # Save the map to a file (could be in other formats too, depending on needs)
-        geo_map_path = "/path/to/save/geo_map.html"
-        fig.write_html(geo_map_path)
+        latitude = request.get("latitude", [])
+        longitude = request.get("longitude", [])
 
-        return {"message": "Geo Map generated successfully", "path": geo_map_path}
+        if not latitude or not longitude:
+            raise ValueError("Latitude or Longitude data is missing")
+
+        # Example of basic geo map creation (real-world scenario may involve more logic)
+        plt.figure(figsize=(10, 6))
+
+        # Simulate plotting geo map
+        plt.scatter(longitude, latitude, c=np.random.rand(len(latitude)), cmap='viridis', s=100)
+        plt.title("Geo Map")
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+        plt.colorbar()
+
+        # Save the plot as a PNG image
+        img_byte_arr = BytesIO()
+        plt.savefig(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+
+        # Return the geo map image as a streaming response
+        return StreamingResponse(img_byte_arr, media_type="image/png")
     except Exception as e:
-        return {"error": f"Error in generating geo map: {str(e)}"}
+        logging.error(f"Error in /geo-map: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Error in generating geo map: {str(e)}"})
+
+
+@app.post("/upload-file")
+async def upload_file(file: UploadFile = File(...)):
+    """
+    Upload a file and return some basic information about it.
+    """
+    try:
+        # Read the uploaded file into a pandas DataFrame
+        contents = await file.read()
+        df = pd.read_csv(BytesIO(contents))  # Assuming CSV format
+
+        # Example: return the first few rows of the CSV file
+        return {"filename": file.filename, "data_preview": df.head().to_dict()}
+    except Exception as e:
+        logging.error(f"Error in /upload-file: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": f"Error in file upload: {str(e)}"})
+
+
+# Run with: `uvicorn api:app --reload`
