@@ -1,139 +1,114 @@
+# app.py
 import streamlit as st
-import os
-import pandas as pd
-from datetime import datetime
 import requests
+import pandas as pd
 from io import BytesIO
 import plotly.graph_objects as go
 from PIL import Image
+import time
+import os
 
-UPLOAD_DIR = "uploaded_files"
-# Use environment variable for backend URL with localhost as fallback
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Configuration
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+MAX_RETRIES = 3
+RETRY_DELAY = 2
 
-st.set_page_config(page_title="CSV Analyzer App", layout="wide")
-
-# Custom CSS to improve error visibility
-st.markdown("""
-    <style>
-    .stAlert {
-        background-color: #ffebee;
-        border-left: 4px solid #f44336;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-st.sidebar.title("Navigation")
-app_mode = st.sidebar.radio("Choose the view:", ["User Upload", "Admin Dashboard"])
-
-def check_backend_connection():
+# Helper functions
+def check_backend():
     """Check if backend is available"""
     try:
         response = requests.get(f"{BACKEND_URL}/", timeout=3)
-        return response.status_code == 200
+        return response.status_code < 500
     except:
         return False
 
-# ---------------------- USER UPLOAD PAGE ----------------------
-if app_mode == "User Upload":
-    st.title("📊 Upload CSV/Excel for Analysis")
-
-    # Backend connection check
-    if not check_backend_connection():
-        st.error("⚠️ Backend service is not available. Please ensure the backend server is running.")
-        if st.button("Retry Connection"):
-            st.experimental_rerun()
-
-    uploaded_file = st.file_uploader("Upload CSV/Excel File", type=["csv", "xlsx", "xls"])
-
-    if uploaded_file:
-        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uploaded_file.name}"
-        file_path = os.path.join(UPLOAD_DIR, filename)
-
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success(f"Uploaded and saved as {filename}")
-
-        # Load file into dataframe
+def safe_api_call(url, method="post", **kwargs):
+    """Make API call with retries"""
+    for attempt in range(MAX_RETRIES):
         try:
-            if filename.endswith(".csv"):
-                df = pd.read_csv(file_path)
-            else:
-                df = pd.read_excel(file_path)
-        except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
-            st.stop()
+            response = requests.request(
+                method,
+                url,
+                timeout=10,
+                **kwargs
+            )
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            time.sleep(RETRY_DELAY)
+    return None
 
+# UI Setup
+st.set_page_config(page_title="Sentiment Analysis", layout="wide")
+st.title("📊 Sentiment Analysis Dashboard")
+
+# Connection check
+if not check_backend():
+    st.error("⚠️ Backend service unavailable. Please ensure the API server is running.")
+    st.info(f"Trying to connect to: {BACKEND_URL}")
+    if st.button("Retry Connection"):
+        st.experimental_rerun()
+    st.stop()
+
+# Main App
+uploaded_file = st.file_uploader("Upload your data file", type=["csv", "xlsx"])
+
+if uploaded_file:
+    # Display file preview
+    try:
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+        
         st.subheader("Data Preview")
-        st.write(df.head())
-
-        # Extract text columns
-        text_columns = df.select_dtypes(include=['object']).columns.tolist()
-        if not text_columns:
-            st.error("No text columns found in the uploaded file")
+        st.dataframe(df.head())
+        
+        # Select text column
+        text_cols = df.select_dtypes(include=['object']).columns.tolist()
+        if not text_cols:
+            st.error("No text columns found in the data")
             st.stop()
-
-        text_column = st.selectbox("Select a column for sentiment/word cloud:", options=text_columns)
-
-        if text_column:
-            # Sentiment Pie Chart
-            st.subheader("Sentiment Pie Chart")
+        
+        selected_col = st.selectbox("Select text column for analysis", text_cols)
+        
+        # Analysis sections
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Sentiment Analysis")
             try:
                 with st.spinner("Analyzing sentiment..."):
-                    response = requests.post(
+                    response = safe_api_call(
                         f"{BACKEND_URL}/sentiment-pie",
-                        files={"file": (uploaded_file.name, uploaded_file.getvalue())},
-                        timeout=10
+                        files={"file": (uploaded_file.name, uploaded_file.getvalue())}
                     )
-                    response.raise_for_status()
-                    pie_data = response.json()
                     
-                    fig = go.Figure(data=[go.Pie(
-                        labels=pie_data["labels"],
-                        values=pie_data["values"],
+                    data = response.json()
+                    fig = go.Figure(go.Pie(
+                        labels=data["labels"],
+                        values=data["values"],
                         hole=0.3
-                    )])
-                    st.plotly_chart(fig)
-            except requests.exceptions.RequestException as e:
-                st.error(f"Failed to generate sentiment chart: {str(e)}")
-
-            # Word Cloud
+                    ))
+                    st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                st.error(f"Sentiment analysis failed: {str(e)}")
+        
+        with col2:
             st.subheader("Word Cloud")
             try:
                 with st.spinner("Generating word cloud..."):
-                    response = requests.post(
+                    response = safe_api_call(
                         f"{BACKEND_URL}/wordcloud",
-                        json={"texts": df[text_column].dropna().astype(str).tolist()},
-                        timeout=10
+                        json={"texts": df[selected_col].dropna().astype(str).tolist()}
                     )
-                    response.raise_for_status()
-                    image = Image.open(BytesIO(response.content))
-                    st.image(image, caption="Generated Word Cloud", use_column_width=True)
-            except requests.exceptions.RequestException as e:
-                st.error(f"Failed to generate word cloud: {str(e)}")
-
-# ---------------------- ADMIN DASHBOARD ----------------------
-elif app_mode == "Admin Dashboard":
-    st.title("🛠️ Admin Dashboard – View Uploaded Files")
-
-    file_list = sorted(os.listdir(UPLOAD_DIR), reverse=True)
-
-    if file_list:
-        selected_file = st.selectbox("Select a previously uploaded file", file_list)
-
-        if selected_file:
-            full_path = os.path.join(UPLOAD_DIR, selected_file)
-
-            try:
-                if selected_file.endswith(".csv"):
-                    df = pd.read_csv(full_path)
-                else:
-                    df = pd.read_excel(full_path)
-
-                st.subheader(f"Preview of: {selected_file}")
-                st.write(df.head())
+                    
+                    img = Image.open(BytesIO(response.content))
+                    st.image(img, caption="Word Cloud", use_container_width=True)
             except Exception as e:
-                st.error(f"Error reading file: {str(e)}")
-    else:
-        st.info("No uploaded files found.")
+                st.error(f"Word cloud generation failed: {str(e)}")
+                
+    except Exception as e:
+        st.error(f"Error processing file: {str(e)}")
