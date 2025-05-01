@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 from PIL import Image
 
 UPLOAD_DIR = "uploaded_files"
-BACKEND_URL = "https://your-backend-url.com"  # Replace with your actual backend URL
+BACKEND_URL = "http://localhost:8000"  # Replace with your actual backend URL
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 st.set_page_config(page_title="CSV Analyzer App", layout="wide")
@@ -39,7 +39,7 @@ if app_mode == "User Upload":
         st.subheader("Data Preview")
         st.write(df.head())
 
-        # Text columns selection
+        # Extract text columns
         text_columns = df.select_dtypes(include=['object']).columns.tolist()
         text_column = st.selectbox("Select a column for sentiment/word cloud:", options=text_columns)
 
@@ -73,28 +73,6 @@ if app_mode == "User Upload":
                     st.error(f"Failed to generate word cloud: {e}")
             else:
                 st.error(f"Failed to generate word cloud. Status Code: {response.status_code}")
-
-            # -------- Geo Map if latitude and longitude exist --------
-            if "latitude" in df.columns and "longitude" in df.columns:
-                st.subheader("Geo Map")
-                response = requests.post(f"{BACKEND_URL}/geo-map", json={
-                    "latitude": df["latitude"].dropna().tolist(),
-                    "longitude": df["longitude"].dropna().tolist()
-                })
-                if response.status_code == 200:
-                    geo_data = response.json()
-                    fig = go.Figure(data=go.Scattergeo(
-                        lon=geo_data["longitude"],
-                        lat=geo_data["latitude"],
-                        mode='markers',
-                        marker=dict(size=6)
-                    ))
-                    fig.update_layout(geo=dict(scope="world"))
-                    st.plotly_chart(fig)
-                else:
-                    st.warning("Failed to generate geo map.")
-            else:
-                st.info("No latitude/longitude columns found.")
 
 # ---------------------- ADMIN DASHBOARD ----------------------
 elif app_mode == "Admin Dashboard":
