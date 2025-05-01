@@ -1,59 +1,65 @@
 import pandas as pd
 from textblob import TextBlob
-import geopandas as gpd
 import plotly.express as px
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
-import folium
-from io import StringIO
+from flask import Flask, jsonify, request
+import io
+
+app = Flask(__name__)
 
 # Load the dataset
 def load_data(uploaded_file):
     try:
-        # Read the CSV file
-        data = pd.read_csv(uploaded_file)
+        # Read the CSV or Excel file into a dataframe
+        if uploaded_file.endswith('.csv'):
+            data = pd.read_csv(uploaded_file)
+        else:
+            data = pd.read_excel(uploaded_file)
         return data
     except Exception as e:
         print(f"Error loading data: {e}")
         return None
 
 # Sentiment pie chart
-def sentiment_pie_chart(text_column):
-    sentiment_counts = {'Positive': 0, 'Negative': 0, 'Neutral': 0}
-    
-    for text in text_column:
-        try:
-            blob = TextBlob(str(text))
-            sentiment = blob.sentiment.polarity
-            if sentiment > 0:
-                sentiment_counts['Positive'] += 1
-            elif sentiment < 0:
-                sentiment_counts['Negative'] += 1
-            else:
-                sentiment_counts['Neutral'] += 1
-        except Exception as e:
-            print(f"Error processing sentiment: {e}")
-    
-    labels = sentiment_counts.keys()
-    values = sentiment_counts.values()
+@app.route('/sentiment-pie', methods=['POST'])
+def sentiment_pie_chart():
+    try:
+        # Get the file from the request
+        file = request.files['file']
+        if file.filename.endswith('.csv') or file.filename.endswith('.xlsx'):
+            # Load data into DataFrame
+            data = load_data(file)
+            
+            # Combine all text columns into one series for sentiment analysis
+            text_data = data.select_dtypes(include=['object']).fillna('')
+            text_column = text_data.apply(lambda row: ' '.join(row), axis=1)
 
-    # Create pie chart
-    fig = px.pie(names=labels, values=values, title="Sentiment Distribution")
-    return fig
+            sentiment_counts = {'Positive': 0, 'Negative': 0, 'Neutral': 0}
 
-# Generate Word Cloud
-def generate_wordcloud(text_column):
-    text = " ".join(str(text) for text in text_column)
-    wordcloud = WordCloud(width=800, height=400).generate(text)
-    plt.figure(figsize=(10, 5))
-    plt.imshow(wordcloud, interpolation="bilinear")
-    plt.axis("off")
-    return plt
+            # Sentiment analysis
+            for text in text_column:
+                blob = TextBlob(str(text))
+                sentiment = blob.sentiment.polarity
+                if sentiment > 0:
+                    sentiment_counts['Positive'] += 1
+                elif sentiment < 0:
+                    sentiment_counts['Negative'] += 1
+                else:
+                    sentiment_counts['Neutral'] += 1
 
-# Generate GeoMap (dummy, requires specific location data)
-def generate_geo_map(lat_column, lon_column):
-    # This will generate a basic map, for advanced use, you can update this function
-    m = folium.Map(location=[lat_column.mean(), lon_column.mean()], zoom_start=6)
-    for lat, lon in zip(lat_column, lon_column):
-        folium.CircleMarker(location=[lat, lon], radius=5).add_to(m)
-    return m
+            labels = list(sentiment_counts.keys())
+            values = list(sentiment_counts.values())
+
+            # Generate pie chart
+            fig = px.pie(names=labels, values=values, title="Sentiment Distribution")
+            # Convert chart to JSON response
+            chart_data = fig.to_dict()
+
+            return jsonify(chart_data)
+
+        else:
+            return jsonify({"error": "Invalid file format. Only CSV and Excel files are supported."}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True)

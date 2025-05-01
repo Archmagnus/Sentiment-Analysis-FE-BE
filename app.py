@@ -39,12 +39,14 @@ if app_mode == "User Upload":
         st.subheader("Data Preview")
         st.write(df.head())
 
-        text_column = st.selectbox("Select a column for sentiment/word cloud:", options=df.columns)
+        # Text columns selection
+        text_columns = df.select_dtypes(include=['object']).columns.tolist()
+        text_column = st.selectbox("Select a column for sentiment/word cloud:", options=text_columns)
 
         if text_column:
             # -------- Sentiment Pie Chart API --------
             st.subheader("Sentiment Pie Chart")
-            response = requests.post(f"{BACKEND_URL}/sentiment-pie", json={"texts": df[text_column].dropna().tolist()})
+            response = requests.post(f"{BACKEND_URL}/sentiment-pie", files={"file": uploaded_file})
             if response.status_code == 200:
                 pie_data = response.json()
                 fig = go.Figure(data=[go.Pie(labels=pie_data["labels"], values=pie_data["values"])])
