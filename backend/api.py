@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 import logging
+from textblob import TextBlob  # Simple sentiment analysis
 
 app = FastAPI()
 
@@ -23,14 +24,30 @@ async def sentiment_pie(file: UploadFile = File(...)):
         contents = await file.read()
         df = pd.read_csv(BytesIO(contents))  # Assuming CSV format
 
-        # Example of sentiment analysis logic (can be replaced with a real model)
+        # Ensure there's a text column for sentiment analysis
+        if 'text_column' not in df.columns:
+            raise ValueError("CSV does not contain a 'text_column' for sentiment analysis")
+
+        # Example of sentiment analysis logic using TextBlob (simple example)
+        sentiments = []
+        for text in df['text_column'].dropna():
+            analysis = TextBlob(text)
+            polarity = analysis.sentiment.polarity
+            if polarity > 0:
+                sentiments.append("Positive")
+            elif polarity < 0:
+                sentiments.append("Negative")
+            else:
+                sentiments.append("Neutral")
+
         sentiment_data = {
             "labels": ["Positive", "Negative", "Neutral"],
-            "values": [50, 30, 20]  # These would be dynamically calculated based on text analysis
+            "values": [
+                sentiments.count("Positive"),
+                sentiments.count("Negative"),
+                sentiments.count("Neutral")
+            ]
         }
-
-        # In a real-world scenario, sentiment analysis would look something like:
-        # sentiment_data = analyze_sentiment(df['text_column']) 
 
         return sentiment_data
     except Exception as e:
@@ -80,7 +97,7 @@ async def geo_map(request: dict):
         # Example of basic geo map creation (real-world scenario may involve more logic)
         plt.figure(figsize=(10, 6))
 
-        # Simulate plotting geo map
+        # Plot geo map (using longitude and latitude data)
         plt.scatter(longitude, latitude, c=np.random.rand(len(latitude)), cmap='viridis', s=100)
         plt.title("Geo Map")
         plt.xlabel("Longitude")
@@ -115,5 +132,3 @@ async def upload_file(file: UploadFile = File(...)):
         logging.error(f"Error in /upload-file: {str(e)}")
         return JSONResponse(status_code=500, content={"error": f"Error in file upload: {str(e)}"})
 
-
-# Run with: `uvicorn api:app --reload`
