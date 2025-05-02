@@ -78,7 +78,8 @@ async def analyze_sentiment(file: UploadFile = File(...)):
             f.write(await file.read())
 
         # Read file content
-        content = await file.read()
+        with open(file_path, "rb") as f:
+            content = f.read()
 
         # Load data
         try:
