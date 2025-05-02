@@ -5,7 +5,7 @@ textblob
 matplotlib
 seaborn
 plotly
-wordcloud==1.8.2.2 --only-binary=:all:
+# wordcloud==1.8.2.2 --only-binary=:all:
 # geopandas
 folium
 python-multipart

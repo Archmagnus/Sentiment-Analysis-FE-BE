@@ -15,3 +15,4 @@ tqdm>=4.65.0
 scipy>=1.10.0
 pillow>=9.0.0
 openpyxl
+wordcloud
