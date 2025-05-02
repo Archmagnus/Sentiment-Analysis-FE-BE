@@ -122,11 +122,20 @@ if uploaded_file:
 
                 if response.status_code == 200:
                     img_bytes = BytesIO(response.content)
-                    img = Image.open(img_bytes)
-                    st.image(img, use_column_width=True)
-                    st.caption(f"Generated word cloud from {len(texts)} text entries")
+                    try:
+                        img = Image.open(img_bytes)
+                        st.image(img, use_column_width=True)
+                        st.caption(f"Generated word cloud from {len(texts)} text entries")
+                    except Exception as e:
+                        st.error("Failed to display image. Response was not a valid PNG.")
+                        st.code(response.content[:500], language="text")
                 else:
-                    st.error(f"Word cloud generation failed: {response.text}")
+                    st.error("Word cloud generation failed.")
+                    try:
+                        error_text = response.json()
+                        st.code(json.dumps(error_text, indent=2), language="json")
+                    except:
+                        st.code(response.text[:500], language="text")
 
             except Exception as e:
                 st.error(f"Request error: {str(e)}")
