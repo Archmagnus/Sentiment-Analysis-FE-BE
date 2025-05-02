@@ -1,4 +1,3 @@
-# api.py
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -8,6 +7,7 @@ from textblob import TextBlob
 import logging
 import uvicorn
 import time
+import os
 
 # Initialize FastAPI app with metadata
 app = FastAPI(
@@ -42,6 +42,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Directory to store uploaded files
+UPLOAD_DIR = "uploads"
+
+# Ensure upload directory exists
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize resources when the app starts"""
@@ -64,6 +71,11 @@ async def analyze_sentiment(file: UploadFile = File(...)):
         # Validate file type
         if not file.filename.lower().endswith(('.csv', '.xlsx', '.xls')):
             raise ValueError("Only CSV and Excel files are supported")
+
+        # Save the uploaded file to the server
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as f:
+            f.write(await file.read())
 
         # Read file content
         content = await file.read()
@@ -115,6 +127,28 @@ async def analyze_sentiment(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=400,
             detail=str(e)
+        )
+
+@app.get("/uploaded-files", tags=["analysis"])
+async def list_uploaded_files():
+    """
+    List previously uploaded files in the server's 'uploads' directory.
+    
+    Returns:
+        {
+            "files": ["file1.csv", "file2.xlsx", ...]
+        }
+    """
+    try:
+        # List all files in the upload directory
+        files = os.listdir(UPLOAD_DIR)
+        return {"files": files}
+    
+    except Exception as e:
+        logger.error(f"Error fetching uploaded files: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Error retrieving uploaded files"
         )
 
 @app.get("/health")

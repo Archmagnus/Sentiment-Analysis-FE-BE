@@ -3,9 +3,7 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 from PIL import Image
-import matplotlib.pyplot as plt
 from io import BytesIO
-import json
 
 # === PAGE CONFIG ===
 st.set_page_config(
@@ -75,7 +73,7 @@ if uploaded_file:
         )
 
         # === Tabs ===
-        tab1, tab2 = st.tabs(["Sentiment Analysis", "Word Cloud"])
+        tab1, tab2 = st.tabs(["Sentiment Analysis", "Uploaded Files History"])
 
         with tab1:
             st.subheader("Sentiment Distribution")
@@ -109,36 +107,24 @@ if uploaded_file:
                 st.error(f"Request error: {str(e)}")
 
         with tab2:
-            st.subheader("Word Cloud Visualization")
+            st.subheader("📁 Previously Uploaded Files")
             try:
-                texts = df[selected_col].dropna().astype(str).tolist()
-                if not texts:
-                    st.warning("No valid texts found")
-                    st.stop()
+                with st.spinner("Fetching file history from backend..."):
+                    res = requests.get(f"{BACKEND_URL}/uploaded-files")
 
-                with st.spinner("Generating word cloud..."):
-                    json_data = {"texts": texts}
-                    response = requests.post(f"{BACKEND_URL}/wordcloud", json=json_data)
-
-                if response.status_code == 200:
-                    img_bytes = BytesIO(response.content)
-                    try:
-                        img = Image.open(img_bytes)
-                        st.image(img, use_column_width=True)
-                        st.caption(f"Generated word cloud from {len(texts)} text entries")
-                    except Exception as e:
-                        st.error("Failed to display image. Response was not a valid PNG.")
-                        st.code(response.content[:500], language="text")
+                if res.status_code == 200:
+                    file_data = res.json()
+                    files = file_data.get("files", [])
+                    if files:
+                        for f in files:
+                            st.markdown(f"- {f}")
+                    else:
+                        st.info("No uploaded files found on the server.")
                 else:
-                    st.error("Word cloud generation failed.")
-                    try:
-                        error_text = response.json()
-                        st.code(json.dumps(error_text, indent=2), language="json")
-                    except:
-                        st.code(response.text[:500], language="text")
+                    st.error(f"Failed to fetch uploaded files: {res.text}")
 
             except Exception as e:
-                st.error(f"Request error: {str(e)}")
+                st.error(f"Error retrieving uploaded files: {str(e)}")
 
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
